@@ -19,8 +19,7 @@ import (
 
 	"istio.io/api/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
-	istio_route "istio.io/istio/pilot/pkg/networking/core/v1alpha3/route"
-	"istio.io/istio/pkg/log"
+	"istio.io/istio/pilot/pkg/networking/util"
 )
 
 // Match by source labels, the listener port where traffic comes in, the gateway on which the rule is being
@@ -63,17 +62,19 @@ func matchTCP(match *v1alpha3.L4MatchAttributes, proxyLabels model.LabelsCollect
 	return gatewayMatch && labelMatch && portMatch
 }
 
-// Select the virtual service pertaining to the service being processed.
-func getVirtualServiceForHost(host model.Hostname, configs []model.Config) *v1alpha3.VirtualService {
-	for _, config := range configs {
-		virtualService := config.Spec.(*v1alpha3.VirtualService)
+// Select the config pertaining to the service being processed.
+func getConfigsForHost(host model.Hostname, configs []model.Config) []model.Config {
+	svcConfigs := make([]model.Config, 0)
+	for index := range configs {
+		virtualService := configs[index].Spec.(*v1alpha3.VirtualService)
 		for _, vsHost := range virtualService.Hosts {
 			if model.Hostname(vsHost).Matches(host) {
-				return virtualService
+				svcConfigs = append(svcConfigs, configs[index])
+				break
 			}
 		}
 	}
-	return nil
+	return svcConfigs
 }
 
 // hashRuntimeTLSMatchPredicates hashes runtime predicates of a TLS match
@@ -81,9 +82,9 @@ func hashRuntimeTLSMatchPredicates(match *v1alpha3.TLSMatchAttributes) string {
 	return strings.Join(match.SniHosts, ",") + "|" + strings.Join(match.DestinationSubnets, ",")
 }
 
-func buildSidecarOutboundTLSFilterChainOpts(node *model.Proxy, env *model.Environment, destinationIPAddress string,
+func buildSidecarOutboundTLSFilterChainOpts(env *model.Environment, node *model.Proxy, push *model.PushContext, destinationIPAddress string,
 	service *model.Service, listenPort *model.Port, proxyLabels model.LabelsCollection,
-	gateways map[string]bool, virtualService *v1alpha3.VirtualService) []*filterChainOpts {
+	gateways map[string]bool, configs []model.Config) []*filterChainOpts {
 
 	if !listenPort.Protocol.IsTLS() {
 		return nil
@@ -114,26 +115,23 @@ func buildSidecarOutboundTLSFilterChainOpts(node *model.Proxy, env *model.Enviro
 	hasTLSMatch := false
 
 	out := make([]*filterChainOpts, 0)
-	if virtualService != nil {
+	for _, config := range configs {
+		virtualService := config.Spec.(*v1alpha3.VirtualService)
 		// Ports marked as TLS will have SNI routing if and only if they have an accompanying
 		// virtual service for the same host, and the said virtual service has a TLS route block.
 		// Otherwise we treat ports marked as TLS as opaque TCP services.
 		for _, tls := range virtualService.Tls {
-			// since we don't support weighted destinations yet there can only be exactly 1 destination
-			dest := tls.Route[0].Destination
-			destSvc, err := env.GetService(model.Hostname(dest.Host))
-			if err != nil {
-				log.Debugf("failed to retrieve service for destination %q: %v", service.Hostname, err)
-				continue
-			}
-			clusterName := istio_route.GetDestinationCluster(dest, destSvc, listenPort.Port)
 			for _, match := range tls.Match {
 				if matchTLS(match, proxyLabels, gateways, listenPort.Port) {
 					// Use the service's virtual address first.
 					// But if a virtual service overrides it with its own destination subnet match
 					// give preference to the user provided one
+					// destinationIPAddress will be empty for unix domain sockets
 					destinationCIDRs := []string{destinationIPAddress}
-					if len(match.DestinationSubnets) > 0 {
+					// Only set CIDR match if the listener is bound to an IP.
+					// If its bound to a unix domain socket, then ignore the CIDR matches
+					// Unix domain socket bound ports have Port value set to 0
+					if len(match.DestinationSubnets) > 0 && listenPort.Port > 0 {
 						destinationCIDRs = match.DestinationSubnets
 					}
 					matchHash := hashRuntimeTLSMatchPredicates(match)
@@ -141,8 +139,7 @@ func buildSidecarOutboundTLSFilterChainOpts(node *model.Proxy, env *model.Enviro
 						out = append(out, &filterChainOpts{
 							sniHosts:         match.SniHosts,
 							destinationCIDRs: destinationCIDRs,
-							networkFilters: buildOutboundNetworkFilters(
-								node, clusterName, destinationIPAddress, listenPort),
+							networkFilters:   buildOutboundNetworkFilters(env, node, tls.Route, push, listenPort, config.ConfigMeta),
 						})
 						hasTLSMatch = true
 					}
@@ -154,19 +151,29 @@ func buildSidecarOutboundTLSFilterChainOpts(node *model.Proxy, env *model.Enviro
 
 	// HTTPS or TLS ports without associated virtual service will be treated as opaque TCP traffic.
 	if !hasTLSMatch {
-		clusterName := model.BuildSubsetKey(model.TrafficDirectionOutbound, "", service.Hostname, int(listenPort.Port))
+		var clusterName string
+		// The service could be nil if we are being called in the context of a sidecar config with
+		// user specified port in the egress listener. Since we dont know the destination service
+		// and this piece of code is establishing the final fallback path, we set the
+		// tcp proxy cluster to a blackhole cluster
+		if service != nil {
+			clusterName = model.BuildSubsetKey(model.TrafficDirectionOutbound, "", service.Hostname, listenPort.Port)
+		} else {
+			clusterName = util.BlackHoleCluster
+		}
+
 		out = append(out, &filterChainOpts{
 			destinationCIDRs: []string{destinationIPAddress},
-			networkFilters:   buildOutboundNetworkFilters(node, clusterName, destinationIPAddress, listenPort),
+			networkFilters:   buildOutboundNetworkFiltersWithSingleDestination(env, node, clusterName, listenPort),
 		})
 	}
 
 	return out
 }
 
-func buildSidecarOutboundTCPFilterChainOpts(node *model.Proxy, env *model.Environment, destinationIPAddress string,
+func buildSidecarOutboundTCPFilterChainOpts(env *model.Environment, node *model.Proxy, push *model.PushContext, destinationIPAddress string,
 	service *model.Service, listenPort *model.Port, proxyLabels model.LabelsCollection,
-	gateways map[string]bool, virtualService *v1alpha3.VirtualService) []*filterChainOpts {
+	gateways map[string]bool, configs []model.Config) []*filterChainOpts {
 
 	if listenPort.Protocol.IsTLS() {
 		return nil
@@ -178,24 +185,16 @@ func buildSidecarOutboundTCPFilterChainOpts(node *model.Proxy, env *model.Enviro
 	// break as soon as we add one network filter with no destination addresses to match
 	// This is the terminating condition in the filter chain match list
 	defaultRouteAdded := false
-	if virtualService != nil {
-	TcpLoop:
+TcpLoop:
+	for _, config := range configs {
+		virtualService := config.Spec.(*v1alpha3.VirtualService)
 		for _, tcp := range virtualService.Tcp {
-			// since we don't support weighted destinations yet there can only be exactly 1 destination
-			dest := tcp.Route[0].Destination
-			destSvc, err := env.GetService(model.Hostname(dest.Host))
-			if err != nil {
-				log.Debugf("failed to retrieve service for destination %q: %v", service.Hostname, err)
-				continue
-			}
-			clusterName := istio_route.GetDestinationCluster(dest, destSvc, listenPort.Port)
 			destinationCIDRs := []string{destinationIPAddress}
-
 			if len(tcp.Match) == 0 {
 				// implicit match
 				out = append(out, &filterChainOpts{
 					destinationCIDRs: destinationCIDRs,
-					networkFilters:   buildOutboundNetworkFilters(node, clusterName, destinationIPAddress, listenPort),
+					networkFilters:   buildOutboundNetworkFilters(env, node, tcp.Route, push, listenPort, config.ConfigMeta),
 				})
 				defaultRouteAdded = true
 				break TcpLoop
@@ -211,13 +210,14 @@ func buildSidecarOutboundTCPFilterChainOpts(node *model.Proxy, env *model.Enviro
 					// Scan all the match blocks
 					// if we find any match block without a runtime destination subnet match
 					// i.e. match any destination address, then we treat it as the terminal match/catch all match
-					// and break out of the loop.
+					// and break out of the loop. We also treat it as a terminal match if the listener is bound
+					// to a unix domain socket.
 					// But if we find only runtime destination subnet matches in all match blocks, collect them
 					// (this is similar to virtual hosts in http) and create filter chain match accordingly.
-					if len(match.DestinationSubnets) == 0 {
+					if len(match.DestinationSubnets) == 0 || listenPort.Port == 0 {
 						out = append(out, &filterChainOpts{
 							destinationCIDRs: destinationCIDRs,
-							networkFilters:   buildOutboundNetworkFilters(node, clusterName, destinationIPAddress, listenPort),
+							networkFilters:   buildOutboundNetworkFilters(env, node, tcp.Route, push, listenPort, config.ConfigMeta),
 						})
 						defaultRouteAdded = true
 						break TcpLoop
@@ -230,33 +230,53 @@ func buildSidecarOutboundTCPFilterChainOpts(node *model.Proxy, env *model.Enviro
 			if len(virtualServiceDestinationSubnets) > 0 {
 				out = append(out, &filterChainOpts{
 					destinationCIDRs: virtualServiceDestinationSubnets,
-					networkFilters:   buildOutboundNetworkFilters(node, clusterName, "", listenPort),
+					networkFilters:   buildOutboundNetworkFilters(env, node, tcp.Route, push, listenPort, config.ConfigMeta),
 				})
 			}
 		}
 	}
 
 	if !defaultRouteAdded {
-		clusterName := model.BuildSubsetKey(model.TrafficDirectionOutbound, "", service.Hostname, int(listenPort.Port))
+
+		var clusterName string
+		// The service could be nil if we are being called in the context of a sidecar config with
+		// user specified port in the egress listener. Since we dont know the destination service
+		// and this piece of code is establishing the final fallback path, we set the
+		// tcp proxy cluster to a blackhole cluster
+		if service != nil {
+			clusterName = model.BuildSubsetKey(model.TrafficDirectionOutbound, "", service.Hostname, listenPort.Port)
+		} else {
+			clusterName = util.BlackHoleCluster
+		}
+
 		out = append(out, &filterChainOpts{
 			destinationCIDRs: []string{destinationIPAddress},
-			networkFilters:   buildOutboundNetworkFilters(node, clusterName, destinationIPAddress, listenPort),
+			networkFilters:   buildOutboundNetworkFiltersWithSingleDestination(env, node, clusterName, listenPort),
 		})
 	}
 
 	return out
 }
 
-func buildSidecarOutboundTCPTLSFilterChainOpts(node *model.Proxy, env *model.Environment, configs []model.Config, destinationIPAddress string,
-	service *model.Service, listenPort *model.Port, proxyLabels model.LabelsCollection, gateways map[string]bool) []*filterChainOpts {
-
-	virtualService := getVirtualServiceForHost(service.Hostname, configs)
+// This function can be called for namespaces with the auto generated sidecar, i.e. once per service and per port.
+// OR, it could be called in the context of an egress listener with specific TCP port on a sidecar config.
+// In the latter case, there is no service associated with this listen port. So we have to account for this
+// missing service throughout this file
+func buildSidecarOutboundTCPTLSFilterChainOpts(env *model.Environment, node *model.Proxy, push *model.PushContext,
+	configs []model.Config, destinationIPAddress string, service *model.Service, listenPort *model.Port,
+	proxyLabels model.LabelsCollection, gateways map[string]bool) []*filterChainOpts {
 
 	out := make([]*filterChainOpts, 0)
-	out = append(out, buildSidecarOutboundTLSFilterChainOpts(node, env, destinationIPAddress, service, listenPort,
-		proxyLabels, gateways, virtualService)...)
-	out = append(out, buildSidecarOutboundTCPFilterChainOpts(node, env, destinationIPAddress, service, listenPort,
-		proxyLabels, gateways, virtualService)...)
+	var svcConfigs []model.Config
+	if service != nil {
+		svcConfigs = getConfigsForHost(service.Hostname, configs)
+	} else {
+		svcConfigs = configs
+	}
 
+	out = append(out, buildSidecarOutboundTLSFilterChainOpts(env, node, push, destinationIPAddress, service, listenPort,
+		proxyLabels, gateways, svcConfigs)...)
+	out = append(out, buildSidecarOutboundTCPFilterChainOpts(env, node, push, destinationIPAddress, service, listenPort,
+		proxyLabels, gateways, svcConfigs)...)
 	return out
 }

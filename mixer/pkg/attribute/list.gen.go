@@ -3,14 +3,14 @@
 
 package attribute
 
-func GlobalList() ([]string) { 
-    tmp := make([]string, len(globalList))
-    copy(tmp, globalList)
-    return tmp
+func GlobalList() []string {
+	tmp := make([]string, len(globalList))
+	copy(tmp, globalList)
+	return tmp
 }
 
-var ( 
-    globalList = []string{
+var (
+	globalList = []string{
 		"source.ip",
 		"source.port",
 		"source.name",
@@ -213,5 +213,24 @@ var (
 		"response.grpc_message",
 		"context.reporter.type",
 		"context.reporter.kind",
-    }
+		"connection.requested_server_name",
+		"request.url_path",
+		"request.query_params",
+		"context.proxy_error_code",
+		"UH",
+		"UF",
+		"UO",
+		"NR",
+		"LH",
+		"UT",
+		"LR",
+		"UR",
+		"UC",
+		"DI",
+		"FI",
+		"RL",
+		"\"-\"",
+		"inbound",
+		"outbound",
+	}
 )

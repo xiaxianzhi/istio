@@ -1,16 +1,16 @@
-//  Copyright 2018 Istio Authors
+// Copyright 2018 Istio Authors
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package runtime
 
@@ -22,22 +22,28 @@ import (
 
 	"github.com/gogo/protobuf/types"
 
-	"istio.io/istio/galley/pkg/mcp/snapshot"
+	"istio.io/istio/galley/pkg/meshconfig"
 	"istio.io/istio/galley/pkg/runtime/resource"
+	"istio.io/istio/pkg/mcp/snapshot"
 )
 
 var testSchema = func() *resource.Schema {
 	b := resource.NewSchemaBuilder()
-	b.Register("type.googleapis.com/google.protobuf.Empty", true)
+	b.Register("empty", "type.googleapis.com/google.protobuf.Empty")
+	b.Register("struct", "type.googleapis.com/google.protobuf.Struct")
 	return b.Build()
 }()
 
-var emptyInfo = testSchema.Get("type.googleapis.com/google.protobuf.Empty")
+var (
+	emptyInfo  = testSchema.Get("empty")
+	structInfo = testSchema.Get("struct")
+)
 
 func TestProcessor_Start(t *testing.T) {
 	src := NewInMemorySource()
-	distributor := snapshot.New()
-	p := NewProcessor(src, distributor)
+	distributor := snapshot.New(snapshot.DefaultGroupIndex)
+	cfg := &Config{Mesh: meshconfig.NewInMemory()}
+	p := NewProcessor(src, distributor, cfg)
 
 	err := p.Start()
 	if err != nil {
@@ -53,14 +59,15 @@ func TestProcessor_Start(t *testing.T) {
 
 type erroneousSource struct{}
 
-func (e *erroneousSource) Start() (chan resource.Event, error) {
-	return nil, errors.New("cheese not found")
+func (e *erroneousSource) Start(_ resource.EventHandler) error {
+	return errors.New("cheese not found")
 }
 func (e *erroneousSource) Stop() {}
 
 func TestProcessor_Start_Error(t *testing.T) {
-	distributor := snapshot.New()
-	p := NewProcessor(&erroneousSource{}, distributor)
+	distributor := snapshot.New(snapshot.DefaultGroupIndex)
+	cfg := &Config{Mesh: meshconfig.NewInMemory()}
+	p := NewProcessor(&erroneousSource{}, distributor, cfg)
 
 	err := p.Start()
 	if err == nil {
@@ -70,10 +77,11 @@ func TestProcessor_Start_Error(t *testing.T) {
 
 func TestProcessor_Stop(t *testing.T) {
 	src := NewInMemorySource()
-	distributor := snapshot.New()
+	distributor := snapshot.New(snapshot.DefaultGroupIndex)
 	strategy := newPublishingStrategyWithDefaults()
+	cfg := &Config{Mesh: meshconfig.NewInMemory()}
 
-	p := newProcessor(src, distributor, strategy, testSchema, nil)
+	p := newProcessor(newState(snapshot.DefaultGroup, testSchema, cfg, strategy, distributor), src, nil)
 
 	err := p.Start()
 	if err != nil {
@@ -91,15 +99,16 @@ func TestProcessor_EventAccumulation(t *testing.T) {
 	distributor := NewInMemoryDistributor()
 	// Do not quiesce/timeout for an hour
 	strategy := newPublishingStrategy(time.Hour, time.Hour, time.Millisecond)
+	cfg := &Config{Mesh: meshconfig.NewInMemory()}
 
-	p := newProcessor(src, distributor, strategy, testSchema, nil)
+	p := newProcessor(newState(snapshot.DefaultGroup, testSchema, cfg, strategy, distributor), src, nil)
 	err := p.Start()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	k1 := resource.Key{TypeURL: emptyInfo.TypeURL, FullName: "r1"}
-	src.Set(k1, &types.Empty{})
+	k1 := resource.Key{Collection: emptyInfo.Collection, FullName: resource.FullNameFromNamespaceAndName("", "r1")}
+	src.Set(k1, resource.Metadata{}, &types.Empty{})
 
 	// Wait "long enough"
 	time.Sleep(time.Millisecond * 10)
@@ -116,15 +125,16 @@ func TestProcessor_EventAccumulation_WithFullSync(t *testing.T) {
 	distributor := NewInMemoryDistributor()
 	// Do not quiesce/timeout for an hour
 	strategy := newPublishingStrategy(time.Hour, time.Hour, time.Millisecond)
+	cfg := &Config{Mesh: meshconfig.NewInMemory()}
 
-	p := newProcessor(src, distributor, strategy, testSchema, nil)
+	p := newProcessor(newState(snapshot.DefaultGroup, testSchema, cfg, strategy, distributor), src, nil)
 	err := p.Start()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	k1 := resource.Key{TypeURL: info.TypeURL, FullName: "r1"}
-	src.Set(k1, &types.Empty{})
+	k1 := resource.Key{Collection: info.Collection, FullName: resource.FullNameFromNamespaceAndName("", "r1")}
+	src.Set(k1, resource.Metadata{}, &types.Empty{})
 
 	// Wait "long enough"
 	time.Sleep(time.Millisecond * 10)
@@ -140,6 +150,7 @@ func TestProcessor_Publishing(t *testing.T) {
 	src := NewInMemorySource()
 	distributor := NewInMemoryDistributor()
 	strategy := newPublishingStrategy(time.Millisecond, time.Millisecond, time.Microsecond)
+	cfg := &Config{Mesh: meshconfig.NewInMemory()}
 
 	processCallCount := sync.WaitGroup{}
 	hookFn := func() {
@@ -147,14 +158,14 @@ func TestProcessor_Publishing(t *testing.T) {
 	}
 	processCallCount.Add(3) // 1 for add, 1 for sync, 1 for publish trigger
 
-	p := newProcessor(src, distributor, strategy, testSchema, hookFn)
+	p := newProcessor(newState(snapshot.DefaultGroup, testSchema, cfg, strategy, distributor), src, hookFn)
 	err := p.Start()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	k1 := resource.Key{TypeURL: info.TypeURL, FullName: "r1"}
-	src.Set(k1, &types.Empty{})
+	k1 := resource.Key{Collection: info.Collection, FullName: resource.FullNameFromNamespaceAndName("", "r1")}
+	src.Set(k1, resource.Metadata{}, &types.Empty{})
 
 	processCallCount.Wait()
 

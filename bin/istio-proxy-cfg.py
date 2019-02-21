@@ -1,5 +1,20 @@
 #!/usr/bin/env python
+#
+# Copyright 2018 Istio Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+from __future__ import print_function
 import os
 import sys
 
@@ -129,12 +144,6 @@ class XDS(object):
                 "/v1/registration/{service_key}".format(service_key=service_key))
         return self.sds_info[service_key]
 
-    def cache_stats(self):
-        return self.query("/cache_stats")
-
-    def clear_cache_stats(self):
-        return self.query("/cache_stats_delete", post=True)
-
 # Class XDS end
 
 # Proxy class
@@ -249,7 +258,7 @@ def find_pilot_url():
     port_forward_pid = ""
     if pilot_svc:
         pilot_spec = json.loads(pilot_svc)['spec']
-        disovery_port = ""
+        discovery_port = ""
         legacy_discovery_port = ""
         for port in pilot_spec['ports']:
             if port['name'] == 'http-legacy-discovery':
@@ -321,25 +330,7 @@ def main(args):
         data = xds.lds(pod, True)
         yaml.safe_dump(data, op, default_flow_style=False,
                        allow_unicode=False, indent=2)
-        print "Wrote ", output_file
-
-        if args.cache_stats:
-            output_file = output_dir + "/" + "stats_xds.yaml"
-            op = open(output_file, "wt")
-            data = xds.cache_stats()
-            logging.info("Fetching Pilot cache stats")
-            yaml.safe_dump(data, op, default_flow_style=False,
-                           allow_unicode=False, indent=2)
-            print "Wrote ", output_file
-
-            if args.show_ssl_summary:
-                for l in data["listeners"]:
-                    state = "SSL" if "ssl_context" in l else "PLAINTEXT"
-                    logging.info(
-                        "Listener {0:30s} : {1:10s}".format(l["name"], state))
-
-        if args.clear_cache_stats:
-            xds.clear_cache_stats()
+        print("Wrote ", output_file)
 
         if pilot_port_forward_pid:
             subprocess.call(["kill", "%s" % pilot_port_forward_pid])
@@ -355,20 +346,20 @@ def main(args):
         data = pr.routes()
         yaml.safe_dump(data, op, default_flow_style=False,
                        allow_unicode=False, indent=2)
-        print "Wrote ", output_file
+        print("Wrote ", output_file)
 
         output_file = output_dir + "/" + "proxy_listeners.yaml"
         op = open(output_file, "wt")
         data = pr.listeners()
         yaml.safe_dump(data, op, default_flow_style=False,
                        allow_unicode=False, indent=2)
-        print "Wrote ", output_file
+        print("Wrote ", output_file)
 
         output_file = output_dir + "/" + "proxy_clusters.yaml"
         op = open(output_file, "wt")
         data = pr.clusters()
         op.write(data)
-        print "Wrote ", output_file
+        print("Wrote ", output_file)
 
         if envoy_port_forward_pid:
             subprocess.call(["kill", "%s" % envoy_port_forward_pid])
@@ -395,9 +386,5 @@ if __name__ == "__main__":
         "--show_ssl_summary",
         action="store_true",
         help="If set, show summary for ssl context for listeners that have it")
-    parser.add_argument(
-        "--cache_stats", action='store_true', help="Fetch Pilot cache stats")
-    parser.add_argument(
-        "--clear_cache_stats", action='store_true', help="Clear Pilot cache stats")
     args = parser.parse_args()
     sys.exit(main(args))

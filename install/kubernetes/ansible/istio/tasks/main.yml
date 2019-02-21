@@ -1,9 +1,5 @@
 ---
 
-- name: Is istio.addon be iterable
-  set_fact:
-    is_istioaddon_iterable: "{{ istio.addon is defined and istio.addon is iterable }}"
-
 - include_tasks: set_appropriate_cmd_path.yml
   when: cmd_path is not defined
 
@@ -17,10 +13,15 @@
       - "vo.stdout is version_compare(minimum_cluster_version,'>=')"
     msg: "Cluster version must be at least {{ minimum_cluster_version }}"
 
-- include_tasks: install_on_cluster.yml
+- include_tasks: set_istio_path.yml
+
 - include_tasks: delete_resources.yml
   when: istio.delete_resources == true
+
+- include_tasks: install_on_cluster.yml
+
 - include_tasks: change_scc.yml
   when: cluster_flavour == 'ocp'
+
 - include_tasks: install_samples.yml
-  when: (istio.samples is iterable) and (istio.samples | length > 0)
+  when: (istio.samples is defined) and (istio.samples is iterable) and (istio.samples | length > 0)

@@ -8,7 +8,9 @@ import fmt "fmt"
 import math "math"
 import _ "github.com/gogo/protobuf/gogoproto"
 
-import binary "encoding/binary"
+import bytes "bytes"
+
+import encoding_binary "encoding/binary"
 
 import io "io"
 
@@ -17,19 +19,56 @@ var _ = proto.Marshal
 var _ = fmt.Errorf
 var _ = math.Inf
 
+// This is a compile-time assertion to ensure that this generated file
+// is compatible with the proto package it is being compiled against.
+// A compilation error at this line likely means your copy of the
+// proto package needs to be updated.
+const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
+
 // Specifies the int64 start and end of the range using half-open interval semantics [start,
 // end).
 type Int64Range struct {
 	// start of the range (inclusive)
 	Start int64 `protobuf:"varint,1,opt,name=start,proto3" json:"start,omitempty"`
 	// end of the range (exclusive)
-	End int64 `protobuf:"varint,2,opt,name=end,proto3" json:"end,omitempty"`
+	End                  int64    `protobuf:"varint,2,opt,name=end,proto3" json:"end,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *Int64Range) Reset()                    { *m = Int64Range{} }
-func (m *Int64Range) String() string            { return proto.CompactTextString(m) }
-func (*Int64Range) ProtoMessage()               {}
-func (*Int64Range) Descriptor() ([]byte, []int) { return fileDescriptorRange, []int{0} }
+func (m *Int64Range) Reset()         { *m = Int64Range{} }
+func (m *Int64Range) String() string { return proto.CompactTextString(m) }
+func (*Int64Range) ProtoMessage()    {}
+func (*Int64Range) Descriptor() ([]byte, []int) {
+	return fileDescriptor_range_5bab87ce95a03009, []int{0}
+}
+func (m *Int64Range) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *Int64Range) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_Int64Range.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *Int64Range) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Int64Range.Merge(dst, src)
+}
+func (m *Int64Range) XXX_Size() int {
+	return m.Size()
+}
+func (m *Int64Range) XXX_DiscardUnknown() {
+	xxx_messageInfo_Int64Range.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Int64Range proto.InternalMessageInfo
 
 func (m *Int64Range) GetStart() int64 {
 	if m != nil {
@@ -51,13 +90,44 @@ type DoubleRange struct {
 	// start of the range (inclusive)
 	Start float64 `protobuf:"fixed64,1,opt,name=start,proto3" json:"start,omitempty"`
 	// end of the range (exclusive)
-	End float64 `protobuf:"fixed64,2,opt,name=end,proto3" json:"end,omitempty"`
+	End                  float64  `protobuf:"fixed64,2,opt,name=end,proto3" json:"end,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *DoubleRange) Reset()                    { *m = DoubleRange{} }
-func (m *DoubleRange) String() string            { return proto.CompactTextString(m) }
-func (*DoubleRange) ProtoMessage()               {}
-func (*DoubleRange) Descriptor() ([]byte, []int) { return fileDescriptorRange, []int{1} }
+func (m *DoubleRange) Reset()         { *m = DoubleRange{} }
+func (m *DoubleRange) String() string { return proto.CompactTextString(m) }
+func (*DoubleRange) ProtoMessage()    {}
+func (*DoubleRange) Descriptor() ([]byte, []int) {
+	return fileDescriptor_range_5bab87ce95a03009, []int{1}
+}
+func (m *DoubleRange) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *DoubleRange) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_DoubleRange.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (dst *DoubleRange) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DoubleRange.Merge(dst, src)
+}
+func (m *DoubleRange) XXX_Size() int {
+	return m.Size()
+}
+func (m *DoubleRange) XXX_DiscardUnknown() {
+	xxx_messageInfo_DoubleRange.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DoubleRange proto.InternalMessageInfo
 
 func (m *DoubleRange) GetStart() float64 {
 	if m != nil {
@@ -102,6 +172,9 @@ func (this *Int64Range) Equal(that interface{}) bool {
 	if this.End != that1.End {
 		return false
 	}
+	if !bytes.Equal(this.XXX_unrecognized, that1.XXX_unrecognized) {
+		return false
+	}
 	return true
 }
 func (this *DoubleRange) Equal(that interface{}) bool {
@@ -127,6 +200,9 @@ func (this *DoubleRange) Equal(that interface{}) bool {
 		return false
 	}
 	if this.End != that1.End {
+		return false
+	}
+	if !bytes.Equal(this.XXX_unrecognized, that1.XXX_unrecognized) {
 		return false
 	}
 	return true
@@ -156,6 +232,9 @@ func (m *Int64Range) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintRange(dAtA, i, uint64(m.End))
 	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
 	return i, nil
 }
 
@@ -177,14 +256,17 @@ func (m *DoubleRange) MarshalTo(dAtA []byte) (int, error) {
 	if m.Start != 0 {
 		dAtA[i] = 0x9
 		i++
-		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Start))))
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Start))))
 		i += 8
 	}
 	if m.End != 0 {
 		dAtA[i] = 0x11
 		i++
-		binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.End))))
+		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.End))))
 		i += 8
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -199,6 +281,9 @@ func encodeVarintRange(dAtA []byte, offset int, v uint64) int {
 	return offset + 1
 }
 func (m *Int64Range) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Start != 0 {
@@ -207,10 +292,16 @@ func (m *Int64Range) Size() (n int) {
 	if m.End != 0 {
 		n += 1 + sovRange(uint64(m.End))
 	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
 	return n
 }
 
 func (m *DoubleRange) Size() (n int) {
+	if m == nil {
+		return 0
+	}
 	var l int
 	_ = l
 	if m.Start != 0 {
@@ -218,6 +309,9 @@ func (m *DoubleRange) Size() (n int) {
 	}
 	if m.End != 0 {
 		n += 9
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -314,6 +408,7 @@ func (m *Int64Range) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -360,7 +455,7 @@ func (m *DoubleRange) Unmarshal(dAtA []byte) error {
 			if (iNdEx + 8) > l {
 				return io.ErrUnexpectedEOF
 			}
-			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			v = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
 			m.Start = float64(math.Float64frombits(v))
 		case 2:
@@ -371,7 +466,7 @@ func (m *DoubleRange) Unmarshal(dAtA []byte) error {
 			if (iNdEx + 8) > l {
 				return io.ErrUnexpectedEOF
 			}
-			v = uint64(binary.LittleEndian.Uint64(dAtA[iNdEx:]))
+			v = uint64(encoding_binary.LittleEndian.Uint64(dAtA[iNdEx:]))
 			iNdEx += 8
 			m.End = float64(math.Float64frombits(v))
 		default:
@@ -386,6 +481,7 @@ func (m *DoubleRange) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -500,10 +596,10 @@ var (
 	ErrIntOverflowRange   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("envoy/type/range.proto", fileDescriptorRange) }
+func init() { proto.RegisterFile("envoy/type/range.proto", fileDescriptor_range_5bab87ce95a03009) }
 
-var fileDescriptorRange = []byte{
-	// 159 bytes of a gzipped FileDescriptorProto
+var fileDescriptor_range_5bab87ce95a03009 = []byte{
+	// 176 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x4b, 0xcd, 0x2b, 0xcb,
 	0xaf, 0xd4, 0x2f, 0xa9, 0x2c, 0x48, 0xd5, 0x2f, 0x4a, 0xcc, 0x4b, 0x4f, 0xd5, 0x2b, 0x28, 0xca,
 	0x2f, 0xc9, 0x17, 0xe2, 0x02, 0x8b, 0xeb, 0x81, 0xc4, 0xa5, 0x44, 0xd2, 0xf3, 0xd3, 0xf3, 0xc1,
@@ -511,7 +607,8 @@ var fileDescriptorRange = []byte{
 	0x48, 0x97, 0x90, 0x08, 0x17, 0x6b, 0x71, 0x49, 0x62, 0x51, 0x89, 0x04, 0xa3, 0x02, 0xa3, 0x06,
 	0x73, 0x10, 0x84, 0x23, 0x24, 0xc0, 0xc5, 0x9c, 0x9a, 0x97, 0x22, 0xc1, 0x04, 0x16, 0x03, 0x31,
 	0x95, 0x4c, 0xb9, 0xb8, 0x5d, 0xf2, 0x4b, 0x93, 0x72, 0x52, 0xb1, 0x68, 0x63, 0xc4, 0xa2, 0x8d,
-	0x11, 0xac, 0xcd, 0x49, 0x66, 0xc5, 0x23, 0x39, 0xc6, 0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92,
-	0x63, 0x7c, 0xf0, 0x48, 0x8e, 0x31, 0x0a, 0xe2, 0xc0, 0x78, 0x90, 0x03, 0x93, 0xd8, 0xc0, 0x2e,
-	0x32, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0xae, 0xd4, 0x26, 0x8b, 0xcd, 0x00, 0x00, 0x00,
+	0x11, 0xac, 0xcd, 0xc9, 0x62, 0xc5, 0x23, 0x39, 0xc6, 0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92,
+	0x63, 0x7c, 0xf0, 0x48, 0x8e, 0x91, 0x4b, 0x22, 0x33, 0x5f, 0x0f, 0xec, 0xc6, 0x82, 0xa2, 0xfc,
+	0x8a, 0x4a, 0x3d, 0x84, 0x73, 0x03, 0x18, 0xa3, 0x20, 0x8e, 0x8f, 0x07, 0xf1, 0x92, 0xd8, 0xc0,
+	0xae, 0x35, 0x06, 0x04, 0x00, 0x00, 0xff, 0xff, 0x46, 0x33, 0xcc, 0x3a, 0xe9, 0x00, 0x00, 0x00,
 }

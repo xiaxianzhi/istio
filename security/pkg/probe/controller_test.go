@@ -25,6 +25,7 @@ import (
 
 	"istio.io/istio/pkg/probe"
 	"istio.io/istio/security/pkg/caclient/protocol"
+	"istio.io/istio/security/pkg/caclient/protocol/mock"
 	"istio.io/istio/security/pkg/pki/ca"
 	"istio.io/istio/security/pkg/pki/util"
 	pb "istio.io/istio/security/proto"
@@ -32,7 +33,8 @@ import (
 
 func TestGcpGetServiceIdentity(t *testing.T) {
 	bundle, err := util.NewVerifiedKeyCertBundleFromFile(
-		"./testdata/ca.crt", "./testdata/ca.key", "", "./testdata/root.crt")
+		"../pki/testdata/multilevelpki/int-cert.pem", "../pki/testdata/multilevelpki/int-key.pem",
+		"", "../pki/testdata/multilevelpki/root-cert.pem")
 	if err != nil {
 		t.Error(err)
 	}
@@ -73,7 +75,7 @@ func TestGcpGetServiceIdentity(t *testing.T) {
 
 	for id, c := range testCases {
 		fakeProvider := func(_ string, _ []grpc.DialOption) (protocol.CAProtocol, error) {
-			return protocol.NewFakeProtocol(c.resp, c.err), nil
+			return mock.NewFakeProtocol(c.resp, c.err), nil
 		}
 		// test liveness probe check controller
 		controller, err := NewLivenessCheckController(

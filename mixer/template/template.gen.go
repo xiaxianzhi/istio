@@ -95,6 +95,12 @@ func (w *wrapperAttr) Get(name string) (value interface{}, found bool) {
 	return w.get(name)
 }
 
+// Contains returns true if key is present.
+func (w *wrapperAttr) Contains(key string) (found bool) {
+	_, found = w.get(key)
+	return found
+}
+
 // Names returns the names of all the attributes known to this bag.
 func (w *wrapperAttr) Names() []string {
 	return w.names()
@@ -347,7 +353,7 @@ var (
 
 							case "source_pod_ip":
 
-								return []uint8(out.SourcePodIp), true
+								return []byte(out.SourcePodIp), true
 
 							case "source_pod_name":
 
@@ -355,7 +361,7 @@ var (
 
 							case "source_labels":
 
-								return out.SourceLabels, true
+								return attribute.WrapStringMap(out.SourceLabels), true
 
 							case "source_namespace":
 
@@ -367,7 +373,7 @@ var (
 
 							case "source_host_ip":
 
-								return []uint8(out.SourceHostIp), true
+								return []byte(out.SourceHostIp), true
 
 							case "source_workload_uid":
 
@@ -391,7 +397,7 @@ var (
 
 							case "destination_pod_ip":
 
-								return []uint8(out.DestinationPodIp), true
+								return []byte(out.DestinationPodIp), true
 
 							case "destination_pod_name":
 
@@ -403,7 +409,7 @@ var (
 
 							case "destination_labels":
 
-								return out.DestinationLabels, true
+								return attribute.WrapStringMap(out.DestinationLabels), true
 
 							case "destination_namespace":
 
@@ -415,7 +421,7 @@ var (
 
 							case "destination_host_ip":
 
-								return []uint8(out.DestinationHostIp), true
+								return []byte(out.DestinationHostIp), true
 
 							case "destination_owner":
 
@@ -847,7 +853,7 @@ var (
 			},
 
 			// DispatchCheck dispatches the instance to the handler.
-			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}) (adapter.CheckResult, error) {
+			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}, out *attribute.MutableBag, outPrefix string) (adapter.CheckResult, error) {
 
 				// Convert the instance from the generic interface{}, to its specialized type.
 				instance := inst.(*apikey.Instance)
@@ -1075,7 +1081,7 @@ var (
 			},
 
 			// DispatchCheck dispatches the instance to the handler.
-			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}) (adapter.CheckResult, error) {
+			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}, out *attribute.MutableBag, outPrefix string) (adapter.CheckResult, error) {
 
 				// Convert the instance from the generic interface{}, to its specialized type.
 				instance := inst.(*authorization.Instance)
@@ -1175,7 +1181,7 @@ var (
 			},
 
 			// DispatchCheck dispatches the instance to the handler.
-			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}) (adapter.CheckResult, error) {
+			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}, out *attribute.MutableBag, outPrefix string) (adapter.CheckResult, error) {
 
 				// Convert the instance from the generic interface{}, to its specialized type.
 				instance := inst.(*checknothing.Instance)
@@ -1458,13 +1464,10 @@ var (
 
 					var err error = nil
 
-					if param.Value != "" {
-						if t, e := tEvalFn(param.Value); e != nil || t != istio_policy_v1beta1.STRING {
-							if e != nil {
-								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"Value", e)
-							}
-							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"Value", t, istio_policy_v1beta1.STRING)
-						}
+					if param.Value == "" {
+						infrdType.Value = istio_policy_v1beta1.VALUE_TYPE_UNSPECIFIED
+					} else if infrdType.Value, err = tEvalFn(param.Value); err != nil {
+						return nil, fmt.Errorf("failed to evaluate expression for field '%s'; %v", path+"Value", err)
 					}
 
 					return infrdType, err
@@ -1489,7 +1492,7 @@ var (
 			},
 
 			// DispatchCheck dispatches the instance to the handler.
-			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}) (adapter.CheckResult, error) {
+			DispatchCheck: func(ctx context.Context, handler adapter.Handler, inst interface{}, out *attribute.MutableBag, outPrefix string) (adapter.CheckResult, error) {
 
 				// Convert the instance from the generic interface{}, to its specialized type.
 				instance := inst.(*listentry.Instance)
@@ -2168,6 +2171,87 @@ var (
 						}
 					}
 
+					if param.SourceName != "" {
+						if t, e := tEvalFn(param.SourceName); e != nil || t != istio_policy_v1beta1.STRING {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"SourceName", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"SourceName", t, istio_policy_v1beta1.STRING)
+						}
+					}
+
+					if param.SourceIp != "" {
+						if t, e := tEvalFn(param.SourceIp); e != nil || t != istio_policy_v1beta1.IP_ADDRESS {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"SourceIp", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"SourceIp", t, istio_policy_v1beta1.IP_ADDRESS)
+						}
+					}
+
+					if param.DestinationName != "" {
+						if t, e := tEvalFn(param.DestinationName); e != nil || t != istio_policy_v1beta1.STRING {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"DestinationName", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"DestinationName", t, istio_policy_v1beta1.STRING)
+						}
+					}
+
+					if param.DestinationIp != "" {
+						if t, e := tEvalFn(param.DestinationIp); e != nil || t != istio_policy_v1beta1.IP_ADDRESS {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"DestinationIp", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"DestinationIp", t, istio_policy_v1beta1.IP_ADDRESS)
+						}
+					}
+
+					if param.RequestSize != "" {
+						if t, e := tEvalFn(param.RequestSize); e != nil || t != istio_policy_v1beta1.INT64 {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"RequestSize", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"RequestSize", t, istio_policy_v1beta1.INT64)
+						}
+					}
+
+					if param.RequestTotalSize != "" {
+						if t, e := tEvalFn(param.RequestTotalSize); e != nil || t != istio_policy_v1beta1.INT64 {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"RequestTotalSize", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"RequestTotalSize", t, istio_policy_v1beta1.INT64)
+						}
+					}
+
+					if param.ResponseSize != "" {
+						if t, e := tEvalFn(param.ResponseSize); e != nil || t != istio_policy_v1beta1.INT64 {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"ResponseSize", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"ResponseSize", t, istio_policy_v1beta1.INT64)
+						}
+					}
+
+					if param.ResponseTotalSize != "" {
+						if t, e := tEvalFn(param.ResponseTotalSize); e != nil || t != istio_policy_v1beta1.INT64 {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"ResponseTotalSize", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"ResponseTotalSize", t, istio_policy_v1beta1.INT64)
+						}
+					}
+
+					if param.ApiProtocol != "" {
+						if t, e := tEvalFn(param.ApiProtocol); e != nil || t != istio_policy_v1beta1.STRING {
+							if e != nil {
+								return nil, fmt.Errorf("failed to evaluate expression for field '%s': %v", path+"ApiProtocol", e)
+							}
+							return nil, fmt.Errorf("error type checking for field '%s': Evaluated expression type %v want %v", path+"ApiProtocol", t, istio_policy_v1beta1.STRING)
+						}
+					}
+
 					return infrdType, err
 
 				}
@@ -2399,7 +2483,7 @@ func (b *builder_adapter_template_kubernetes_Template) build(
 			return nil, template.NewErrorPath("SourceIp", err)
 		}
 
-		r.SourceIp = vIface.(net.IP)
+		r.SourceIp = net.IP(vIface.([]byte))
 
 	}
 
@@ -2419,7 +2503,7 @@ func (b *builder_adapter_template_kubernetes_Template) build(
 			return nil, template.NewErrorPath("DestinationIp", err)
 		}
 
-		r.DestinationIp = vIface.(net.IP)
+		r.DestinationIp = net.IP(vIface.([]byte))
 
 	}
 
@@ -3905,7 +3989,7 @@ func (b *builder_edge_Template) build(
 // builder struct for constructing an instance of Template.
 type builder_listentry_Template struct {
 
-	// builder for field value: string.
+	// builder for field value: interface{}.
 
 	bldValue compiled.Expression
 } // builder_listentry_Template
@@ -3936,11 +4020,6 @@ func newBuilder_listentry_Template(
 	} else {
 		b.bldValue, expType, err = expb.Compile(param.Value)
 		if err != nil {
-			return nil, template.NewErrorPath("Value", err)
-		}
-
-		if expType != istio_policy_v1beta1.STRING {
-			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.STRING, expType, param.Value)
 			return nil, template.NewErrorPath("Value", err)
 		}
 
@@ -3976,11 +4055,11 @@ func (b *builder_listentry_Template) build(
 
 	if b.bldValue != nil {
 
-		vString, err = b.bldValue.EvaluateString(attrs)
-		if err != nil {
+		if vIface, err = b.bldValue.Evaluate(attrs); err != nil {
 			return nil, template.NewErrorPath("Value", err)
 		}
-		r.Value = vString
+
+		r.Value = vIface
 
 	}
 
@@ -4518,6 +4597,42 @@ type builder_tracespan_Template struct {
 	// builder for field rewrite_client_span_id: bool.
 
 	bldRewriteClientSpanId compiled.Expression
+
+	// builder for field source_name: string.
+
+	bldSourceName compiled.Expression
+
+	// builder for field source_ip: net.IP.
+
+	bldSourceIp compiled.Expression
+
+	// builder for field destination_name: string.
+
+	bldDestinationName compiled.Expression
+
+	// builder for field destination_ip: net.IP.
+
+	bldDestinationIp compiled.Expression
+
+	// builder for field request_size: int64.
+
+	bldRequestSize compiled.Expression
+
+	// builder for field request_total_size: int64.
+
+	bldRequestTotalSize compiled.Expression
+
+	// builder for field response_size: int64.
+
+	bldResponseSize compiled.Expression
+
+	// builder for field response_total_size: int64.
+
+	bldResponseTotalSize compiled.Expression
+
+	// builder for field api_protocol: string.
+
+	bldApiProtocol compiled.Expression
 } // builder_tracespan_Template
 
 // Instantiates and returns a new builder for Template, based on the provided instance parameter.
@@ -4676,6 +4791,131 @@ func newBuilder_tracespan_Template(
 
 	}
 
+	if param.SourceName == "" {
+		b.bldSourceName = nil
+	} else {
+		b.bldSourceName, expType, err = expb.Compile(param.SourceName)
+		if err != nil {
+			return nil, template.NewErrorPath("SourceName", err)
+		}
+
+		if expType != istio_policy_v1beta1.STRING {
+			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.STRING, expType, param.SourceName)
+			return nil, template.NewErrorPath("SourceName", err)
+		}
+
+	}
+
+	if param.SourceIp == "" {
+		b.bldSourceIp = nil
+	} else {
+		b.bldSourceIp, expType, err = expb.Compile(param.SourceIp)
+		if err != nil {
+			return nil, template.NewErrorPath("SourceIp", err)
+		}
+
+	}
+
+	if param.DestinationName == "" {
+		b.bldDestinationName = nil
+	} else {
+		b.bldDestinationName, expType, err = expb.Compile(param.DestinationName)
+		if err != nil {
+			return nil, template.NewErrorPath("DestinationName", err)
+		}
+
+		if expType != istio_policy_v1beta1.STRING {
+			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.STRING, expType, param.DestinationName)
+			return nil, template.NewErrorPath("DestinationName", err)
+		}
+
+	}
+
+	if param.DestinationIp == "" {
+		b.bldDestinationIp = nil
+	} else {
+		b.bldDestinationIp, expType, err = expb.Compile(param.DestinationIp)
+		if err != nil {
+			return nil, template.NewErrorPath("DestinationIp", err)
+		}
+
+	}
+
+	if param.RequestSize == "" {
+		b.bldRequestSize = nil
+	} else {
+		b.bldRequestSize, expType, err = expb.Compile(param.RequestSize)
+		if err != nil {
+			return nil, template.NewErrorPath("RequestSize", err)
+		}
+
+		if expType != istio_policy_v1beta1.INT64 {
+			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.INT64, expType, param.RequestSize)
+			return nil, template.NewErrorPath("RequestSize", err)
+		}
+
+	}
+
+	if param.RequestTotalSize == "" {
+		b.bldRequestTotalSize = nil
+	} else {
+		b.bldRequestTotalSize, expType, err = expb.Compile(param.RequestTotalSize)
+		if err != nil {
+			return nil, template.NewErrorPath("RequestTotalSize", err)
+		}
+
+		if expType != istio_policy_v1beta1.INT64 {
+			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.INT64, expType, param.RequestTotalSize)
+			return nil, template.NewErrorPath("RequestTotalSize", err)
+		}
+
+	}
+
+	if param.ResponseSize == "" {
+		b.bldResponseSize = nil
+	} else {
+		b.bldResponseSize, expType, err = expb.Compile(param.ResponseSize)
+		if err != nil {
+			return nil, template.NewErrorPath("ResponseSize", err)
+		}
+
+		if expType != istio_policy_v1beta1.INT64 {
+			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.INT64, expType, param.ResponseSize)
+			return nil, template.NewErrorPath("ResponseSize", err)
+		}
+
+	}
+
+	if param.ResponseTotalSize == "" {
+		b.bldResponseTotalSize = nil
+	} else {
+		b.bldResponseTotalSize, expType, err = expb.Compile(param.ResponseTotalSize)
+		if err != nil {
+			return nil, template.NewErrorPath("ResponseTotalSize", err)
+		}
+
+		if expType != istio_policy_v1beta1.INT64 {
+			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.INT64, expType, param.ResponseTotalSize)
+			return nil, template.NewErrorPath("ResponseTotalSize", err)
+		}
+
+	}
+
+	if param.ApiProtocol == "" {
+		b.bldApiProtocol = nil
+	} else {
+		b.bldApiProtocol, expType, err = expb.Compile(param.ApiProtocol)
+		if err != nil {
+			return nil, template.NewErrorPath("ApiProtocol", err)
+		}
+
+		if expType != istio_policy_v1beta1.STRING {
+			err = fmt.Errorf("instance field type mismatch: expected='%v', actual='%v', expression='%s'", istio_policy_v1beta1.STRING, expType, param.ApiProtocol)
+			return nil, template.NewErrorPath("ApiProtocol", err)
+		}
+
+	}
+
 	return b, template.ErrorPath{}
 }
 
@@ -4803,6 +5043,96 @@ func (b *builder_tracespan_Template) build(
 			return nil, template.NewErrorPath("RewriteClientSpanId", err)
 		}
 		r.RewriteClientSpanId = vBool
+
+	}
+
+	if b.bldSourceName != nil {
+
+		vString, err = b.bldSourceName.EvaluateString(attrs)
+		if err != nil {
+			return nil, template.NewErrorPath("SourceName", err)
+		}
+		r.SourceName = vString
+
+	}
+
+	if b.bldSourceIp != nil {
+
+		if vIface, err = b.bldSourceIp.Evaluate(attrs); err != nil {
+			return nil, template.NewErrorPath("SourceIp", err)
+		}
+
+		r.SourceIp = net.IP(vIface.([]byte))
+
+	}
+
+	if b.bldDestinationName != nil {
+
+		vString, err = b.bldDestinationName.EvaluateString(attrs)
+		if err != nil {
+			return nil, template.NewErrorPath("DestinationName", err)
+		}
+		r.DestinationName = vString
+
+	}
+
+	if b.bldDestinationIp != nil {
+
+		if vIface, err = b.bldDestinationIp.Evaluate(attrs); err != nil {
+			return nil, template.NewErrorPath("DestinationIp", err)
+		}
+
+		r.DestinationIp = net.IP(vIface.([]byte))
+
+	}
+
+	if b.bldRequestSize != nil {
+
+		vInt, err = b.bldRequestSize.EvaluateInteger(attrs)
+		if err != nil {
+			return nil, template.NewErrorPath("RequestSize", err)
+		}
+		r.RequestSize = vInt
+
+	}
+
+	if b.bldRequestTotalSize != nil {
+
+		vInt, err = b.bldRequestTotalSize.EvaluateInteger(attrs)
+		if err != nil {
+			return nil, template.NewErrorPath("RequestTotalSize", err)
+		}
+		r.RequestTotalSize = vInt
+
+	}
+
+	if b.bldResponseSize != nil {
+
+		vInt, err = b.bldResponseSize.EvaluateInteger(attrs)
+		if err != nil {
+			return nil, template.NewErrorPath("ResponseSize", err)
+		}
+		r.ResponseSize = vInt
+
+	}
+
+	if b.bldResponseTotalSize != nil {
+
+		vInt, err = b.bldResponseTotalSize.EvaluateInteger(attrs)
+		if err != nil {
+			return nil, template.NewErrorPath("ResponseTotalSize", err)
+		}
+		r.ResponseTotalSize = vInt
+
+	}
+
+	if b.bldApiProtocol != nil {
+
+		vString, err = b.bldApiProtocol.EvaluateString(attrs)
+		if err != nil {
+			return nil, template.NewErrorPath("ApiProtocol", err)
+		}
+		r.ApiProtocol = vString
 
 	}
 
